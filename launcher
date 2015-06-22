@@ -1,0 +1,71 @@
+#!/bin/bash
+
+### --------------------- Top-level variables --------------------- ###
+ApplicationRoot=/opt/contestnet     ## Application directory root
+ApplicationBin=/opt/contestnet/bin  ## Application Executables directory
+ApplicationLib=/opt/contestnet/lib  ## Application Executable resources directory
+ApplicationVar=/opt/contestnet/var  ## Application content directory
+ApplicationEtc=/opt/contestnet/etc  ## Application configuration directory
+ApplicationLog=/opt/contestnet/log  ## Application log directory
+ApplicationUpdated=0
+ExitCode=0
+### --------------------------------------------------------------- ###
+# $(date +'%Y-%m-%d %T')
+
+
+### ----------------- Setup Graphical Environment ----------------- ###
+xset s off          ## Disable the screen saver
+xset -dpms          ## Disable the power saving options in Xserver
+xset s noblank      ## Disable screen blanking
+unclutter &         ## Clear the mouse cursor when not in use
+openbox-session &   ## Start the openbox session which will create the window in which everything runs
+sleep 2 && feh --bg-scale $ApplicationEtc/background.jpg & ## Set the background image for the openbox session window displayed in trasitions
+### --------------------------------------------------------------- ###
+
+
+
+### ---------------- Primary Application Loop --------------------- ###
+while :; do
+  ExitCode=0
+  ApplicationUpdated=0
+  
+  ### --------------------- Update Sequence --------------------- ###
+  if [ -e $ApplicationBin/worker.new ]; then
+    ## Back up the current terminal application incase it needs to fall back
+    mv $ApplicationBin/worker $ApplicationBin/worker.restore
+    ## Move the new terminal application into place
+    mv $ApplicationBin/worker.new $ApplicationBin/worker
+    chmod 755 $ApplicationBin/worker
+    
+    ## Set a flag so that launcher knows to fall back on failure in this sequence
+    ApplicationUpdated=1
+  fi
+  ### ----------------------------------------------------------- ###
+  
+  
+  
+  ## need exit codes for:
+  ##  0) no error (continue)
+  ##  1) failure  (this would be a compilation failure from python because of a failed file creation, restore and continue)
+  ##  2) shutdown (set level and break)
+  ##  4) restart  (set level and break)
+  ExitCode=`$ApplicationBin/worker >/dev/null; echo $?`
+  if [ $ExitCode -eq 1 ]; then
+    ## Shutdown (do i need to break out to run the command?)
+    sudo shutdown -h now
+    break
+  elif [ $ExitCode -eq 2 ]; then
+    ## Restart
+    sudo shutdown -r now
+    break
+  elif [ $ExitCode -eq 255 ]; then
+    if [ $ApplicationUpdate -eq 1 ]; then
+      ## Move the bad verison to .err and restore the backup
+      mv $ApplicationBin/worker $ApplicationBin/worker.err
+      mv $ApplicationBin/worker.restore $ApplicationBin/worker
+    fi
+    break
+  fi
+  
+done
+### --------------------------------------------------------------- ###
